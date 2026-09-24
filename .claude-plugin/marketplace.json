@@ -1,0 +1,16 @@
+{
+  "name": "qkwom-plugins",
+  "owner": { "name": "QKWOM" },
+  "metadata": {
+    "description": "QKWOM 的 Claude Code 插件"
+  },
+  "plugins": [
+    {
+      "name": "prompt-nav",
+      "source": "./plugins/prompt-nav",
+      "description": "ChatGPT 式的提问导航条：Claude 桌面版对话右侧显示每条提问的刻度，悬停预览、点击跳回，⌃⌥↑/↓ 逐条切换。",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}

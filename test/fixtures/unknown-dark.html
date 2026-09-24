@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture: unknown markup, dark, document scroll</title>
+<style>
+  html { background: #1f1e1d; }
+  body { margin: 0; font: 15px/1.6 system-ui, sans-serif; color: #ece9e2; }
+  .thread { max-width: 720px; margin: 0 auto; padding: 24px 16px 200px; }
+  .turn { margin: 18px 0; }
+  .bubble { padding: 10px 14px; border-radius: 12px; }
+  .bubble.human { background: #393937; margin-left: 20%; }
+  .md p { margin: 0 0 12px; }
+</style>
+</head>
+<body>
+<div class="thread" id="thread"></div>
+<script>
+  const thread = document.getElementById('thread');
+  const prompts = [
+    ['Explain the rail design'],
+    ['This prompt has two paragraphs.', 'Here is the second paragraph of the same prompt.'],
+    ['How is the active item chosen?'],
+    ['What about keyboard shortcuts?'],
+    ['Can it survive a reload?'],
+    ['Wrap up please'],
+  ];
+  prompts.forEach((paras, i) => {
+    const human = document.createElement('div');
+    human.className = 'turn';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble human';
+    paras.forEach((t) => { const p = document.createElement('p'); p.textContent = t; bubble.append(p); });
+    human.append(bubble);
+    const reply = document.createElement('div');
+    reply.className = 'turn';
+    reply.innerHTML = '<div class="bubble"><div class="md">' +
+      Array.from({ length: 5 }, (_, k) => `<p>Reply ${i + 1}, paragraph ${k + 1}. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.</p>`).join('') +
+      '</div></div>';
+    thread.append(human, reply);
+  });
+</script>
+</body>
+</html>

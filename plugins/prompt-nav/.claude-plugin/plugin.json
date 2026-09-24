@@ -1,0 +1,9 @@
+{
+  "name": "prompt-nav",
+  "version": "0.1.0",
+  "description": "ChatGPT 式的提问导航条：Claude 桌面版对话右侧显示每条提问的刻度，悬停预览、点击跳回，⌃⌥↑/↓ 逐条切换。",
+  "author": { "name": "QKWOM" },
+  "homepage": "https://github.com/QKWOM/Plugin",
+  "repository": "https://github.com/QKWOM/Plugin",
+  "keywords": ["claude-desktop", "navigation", "prompts", "userscript"]
+}

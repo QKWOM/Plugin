@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fixture: claude.ai-like conversation</title>
+<style>
+  html, body { margin: 0; height: 100%; font: 15px/1.6 system-ui, sans-serif; background: #faf9f5; color: #1f1e1d; }
+  .app { display: flex; height: 100vh; }
+  .sidebar { width: 260px; flex: none; background: #f0eee6; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .header { height: 48px; flex: none; border-bottom: 1px solid #e5e2d9; }
+  .scroll { flex: 1; overflow-y: auto; }
+  .col { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+  .row { margin: 18px 0; }
+  .human { max-width: 80%; margin-left: auto; padding: 10px 14px; border-radius: 12px; background: #efece3; }
+  .input { height: 90px; flex: none; border-top: 1px solid #e5e2d9; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"></aside>
+  <main class="main">
+    <div class="header"></div>
+    <div class="scroll" id="scroll"><div class="col" id="col"></div></div>
+    <div class="input"><div contenteditable="true"></div></div>
+  </main>
+</div>
+<script>
+  const col = document.getElementById('col');
+  const prompts = [
+    '帮我概括 EdgeVLA 这篇论文的研究目的',
+    'MobileVLM 在任务分解里具体做了什么？',
+    '论文里 tasklet 的粒度是怎么确定的？',
+    '和 SmolVLA 的分工是什么？',
+    '这个方法有哪些明显的缺陷？',
+    '如何设计一个自动拆分算法？',
+    '给出一个结构化输出格式的例子',
+    '规划正确率怎么评估？',
+    '有没有类似的开源实现？',
+    '帮我写一个实验计划',
+    '总结一下今天的讨论',
+    '最后再列一个待办清单',
+  ];
+  function el(tag, attrs, children) {
+    const e = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v));
+    (children || []).forEach((c) => e.append(c));
+    return e;
+  }
+  function p(text) { return el('p', {}, [text]); }
+  window.addTurn = (text, paragraphs = 4) => {
+    col.append(el('div', { class: 'row' }, [el('div', { class: 'human' }, [el('div', { 'data-testid': 'user-message' }, [p(text)])])]));
+    const answer = [];
+    for (let i = 0; i < paragraphs; i++) answer.push(p(`回答「${text}」的第 ${i + 1} 段。Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`));
+    col.append(el('div', { class: 'row' }, [el('div', { class: 'font-claude-response' }, answer)]));
+  };
+  prompts.forEach((t, i) => addTurn(t, 3 + (i % 4)));
+</script>
+</body>
+</html>
