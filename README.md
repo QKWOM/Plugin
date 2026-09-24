@@ -23,11 +23,23 @@ Claude Code 插件能提供命令、skill、hook 和 MCP，但**没法改桌面�
 
 ## 安装
 
-需要 **Node.js 22 或更新版本**（`node --version` 查看；macOS 可以 `brew install node`）。
+需要 **Node.js 22 或更新版本**：在「终端」里运行 `node --version` 查看。没有的话从 [nodejs.org](https://nodejs.org/) 下载 LTS 版安装，或者 `brew install node`。
 
-### 方式一：作为 Claude Code 插件安装（推荐）
+### 方式一：终端里运行安装命令（推荐）
 
-在 Claude Code（终端或桌面版的 Code 标签页）里依次运行：
+把下面三行粘贴到「终端」里运行：
+
+```bash
+dir=$(mktemp -d)
+git clone --depth 1 https://github.com/QKWOM/Plugin.git "$dir"
+node "$dir/plugins/prompt-nav/bin/claude-nav.mjs" install
+```
+
+它会把文件装到 `~/.claude-prompt-nav/`，并创建启动器。以后想**更新**，再运行一遍这三行就行。
+
+### 方式二：作为 Claude Code 插件安装
+
+在终端版 Claude Code（运行 `claude`）里依次运行：
 
 ```
 /plugin marketplace add QKWOM/Plugin
@@ -35,19 +47,12 @@ Claude Code 插件能提供命令、skill、hook 和 MCP，但**没法改桌面�
 /prompt-nav:setup
 ```
 
-`/prompt-nav:setup` 会把文件装到 `~/.claude-prompt-nav/`，并创建启动器。
-
-### 方式二：不装插件，直接用命令
-
-```bash
-git clone https://github.com/QKWOM/Plugin.git
-node Plugin/plugins/prompt-nav/bin/claude-nav.mjs install
-```
+`/prompt-nav:setup` 做的事和方式一相同。桌面版里如果提示 `/plugin` 不可用，用方式一。
 
 ### 之后怎么打开 Claude
 
-- **macOS**：用 `~/Applications/Claude Prompt Nav.app` 打开 Claude。它用的是 Claude 的图标，可以拖到 Dock 上替换原来的 Claude。
-  如果 Claude 已经以普通方式开着，启动器会先让它退出，再以导航模式重新打开，所以先等正在运行的任务结束。
+- **macOS**：用 `~/Applications/Claude Prompt Nav.app` 打开 Claude（在「访达」里按 `⇧⌘H` 进入个人文件夹 → 应用程序，或者用聚焦搜索 `Claude Prompt Nav`）。它用的是 Claude 的图标，可以拖到 Dock 上替换原来的 Claude。
+  如果 Claude 已经以普通方式开着，启动器会先让它退出（和按 `⌘Q` 一样），再以导航模式重新打开，所以先等正在运行的任务结束。
 - **Windows**：先在右下角托盘里完全退出 Claude，再双击桌面上的 `Claude Prompt Nav.cmd`。
 - 从原来的 Claude 图标打开的话不会有导航条。
 
