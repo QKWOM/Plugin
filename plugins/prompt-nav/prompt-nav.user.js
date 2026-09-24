@@ -9,8 +9,8 @@
 // @noframes
 // ==/UserScript==
 
-// The same file is injected into Claude Desktop by bin/claude-nav.mjs and can be
-// installed as a userscript for claude.ai in a browser. It must stay a single,
+// The same file is installed as a userscript for claude.ai in a browser and pasted
+// into Claude Desktop's DevTools (developer mode) as a snippet. It must stay a single,
 // dependency-free script that is safe to evaluate more than once.
 
 (() => {

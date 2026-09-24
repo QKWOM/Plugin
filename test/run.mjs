@@ -1,17 +1,17 @@
-// End-to-end test: headless Chromium stands in for Claude Desktop (both expose the
-// DevTools protocol), bin/claude-nav.mjs injects the navigator over that port, and
-// Playwright drives the page. Run with `npm test`.
+// End-to-end test of the navigator in headless Chromium, driven by Playwright.
+// It covers the two ways the script runs for real: pasted into DevTools as a snippet
+// on a page that has already loaded (Claude Desktop), and as a userscript that runs
+// on every page load (claude.ai in a browser). Run with `npm test`.
 
 import assert from 'node:assert/strict';
-import { spawn, spawnSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CLI = path.join(ROOT, 'plugins/prompt-nav/bin/claude-nav.mjs');
+const SOURCE = fs.readFileSync(path.join(ROOT, 'plugins/prompt-nav/prompt-nav.user.js'), 'utf8');
 const OUT = path.join(ROOT, 'test/out');
 const fixture = (name) => pathToFileURL(path.join(ROOT, 'test/fixtures', name)).href;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -35,15 +35,6 @@ async function waitFor(fn, what, timeout = 10000) {
   }
 }
 
-function startProcess(cmd, args, env) {
-  const child = spawn(cmd, args, { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
-  child.output = '';
-  child.stdout.on('data', (d) => { child.output += d; });
-  child.stderr.on('data', (d) => { child.output += d; });
-  child.exited = new Promise((r) => child.on('exit', r));
-  return child;
-}
-
 const results = [];
 async function test(name, fn) {
   try {
@@ -57,26 +48,14 @@ async function test(name, fn) {
 }
 
 const { chromium } = loadPlaywright();
-const port = 9400 + Math.floor(Math.random() * 500);
-const home = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-nav-test-'));
 fs.mkdirSync(OUT, { recursive: true });
-
-const chrome = startProcess(chromium.executablePath(), [
-  '--headless=new', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
-  `--remote-debugging-port=${port}`, `--user-data-dir=${path.join(home, 'profile')}`,
-  '--window-size=1280,800', fixture('claude-like.html'),
-]);
-let injector;
-let browser;
+const browser = await chromium.launch({ args: ['--no-sandbox'] });
 
 try {
-  await waitFor(() => fetch(`http://127.0.0.1:${port}/json/version`).then((r) => r.ok), 'chromium debug port');
-  injector = startProcess(process.execPath, [CLI, 'inject', '--port', String(port)], { HOME: home });
-  await waitFor(async () => injector.output.includes('已注入'), 'injector to attach');
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await page.goto(fixture('claude-like.html'));
+  await page.evaluate(SOURCE); // like running the DevTools snippet on a loaded page
 
-  browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-  const page = browser.contexts()[0].pages()[0];
-  await page.setViewportSize({ width: 1280, height: 800 });
   const status = () => page.evaluate(() => window.claudePromptNav?.status());
   const promptTop = (i, sel) => page.evaluate(([i, sel]) => {
     const el = document.querySelectorAll(sel)[i];
@@ -89,7 +68,7 @@ try {
   });
   const USER = '[data-testid="user-message"]';
 
-  console.log('claude.ai-like page (built-in selector, inner scroll container)');
+  console.log('run as a snippet on a claude.ai-like page (built-in selector, inner scroll container)');
 
   await test('detects every prompt automatically', async () => {
     const st = await waitFor(async () => { const s = await status(); return s?.count ? s : null; }, 'prompts');
@@ -195,23 +174,28 @@ try {
     assert.equal(await page.locator('claude-prompt-nav .tick').count(), 13);
   });
 
-  await test('injecting again does not create a second rail', async () => {
-    const once = startProcess(process.execPath, [CLI, 'inject', '--once', '--port', String(port)], { HOME: home });
-    assert.equal(await once.exited, 0, once.output);
+  await test('running the snippet again does not create a second rail', async () => {
+    await page.evaluate(SOURCE);
     assert.equal(await page.evaluate(() => document.querySelectorAll('claude-prompt-nav').length), 1);
+    assert.equal((await status()).count, 13);
   });
 
-  await test('the rail comes back after a reload', async () => {
-    await page.reload();
-    const st = await waitFor(async () => { const s = await status(); return s?.count ? s : null; }, 'prompts after reload');
+  await test('running a newer version replaces the old one', async () => {
+    await page.evaluate(SOURCE.replace(/const VERSION = '[^']+'/, "const VERSION = '9.9.9'"));
+    assert.equal(await page.evaluate(() => document.querySelectorAll('claude-prompt-nav').length), 1);
+    const st = await status();
+    assert.equal(st.version, '9.9.9');
+    assert.equal(st.count, 13);
+  });
+
+  console.log('run as a userscript on every page load');
+  await page.addInitScript(SOURCE);
+
+  await test('it starts while the page is still loading', async () => {
+    await page.goto(fixture('claude-like.html'));
+    const st = await waitFor(async () => { const s = await status(); return s?.count ? s : null; }, 'prompts');
     assert.equal(st.count, 12);
-  });
-
-  await test('status command reports what each window sees', async () => {
-    const st = startProcess(process.execPath, [CLI, 'status', '--port', String(port)], { HOME: home });
-    assert.equal(await st.exited, 0, st.output);
-    assert.match(st.output, /后台注入器: 运行中/);
-    assert.match(st.output, /12 条提问，来源 auto/);
+    assert.equal(st.version, SOURCE.match(/const VERSION = '([^']+)'/)[1]);
   });
 
   console.log('unknown markup (picker, dark theme, document scroll)');
@@ -271,54 +255,8 @@ try {
     assert.equal(reset.count, 0);
   });
 
-  await test('the injector exits by itself once the app quits', async () => {
-    await browser.close().catch(() => {});
-    chrome.kill();
-    const code = await Promise.race([injector.exited, sleep(15000).then(() => 'still running')]);
-    assert.equal(code, 0, injector.output);
-    assert.match(injector.output, /Claude 已退出/);
-    assert.equal(fs.existsSync(path.join(home, '.claude-prompt-nav', 'injector.pid')), false);
-  });
-
-  console.log('start command (fake Claude executable)');
-  const fake = path.join(ROOT, 'test/fixtures/fake-claude.sh');
-  const fakeEnv = { HOME: home, CHROMIUM: chromium.executablePath(), FIXTURE_URL: fixture('claude-like.html') };
-  const port2 = port + 1;
-  const run = async (args) => {
-    const p = startProcess(process.execPath, [CLI, ...args], fakeEnv);
-    const code = await Promise.race([p.exited, sleep(45000).then(() => 'timeout')]);
-    return { code, output: p.output };
-  };
-
-  await test('start refuses to take over an app already running without the port', async () => {
-    startProcess(fake, [], fakeEnv);
-    await sleep(1500);
-    const r = await run(['start', '--app', fake, '--port', String(port2)]);
-    assert.equal(r.code, 1, r.output);
-    assert.match(r.output, /已经以普通方式在运行/);
-  });
-
-  await test('start --restart --detach relaunches it and leaves an injector running', async () => {
-    const r = await run(['start', '--app', fake, '--port', String(port2), '--restart', '--detach']);
-    assert.equal(r.code, 0, r.output);
-    assert.match(r.output, /注入器在后台运行/);
-    const st = await waitFor(async () => {
-      const s = await run(['status', '--port', String(port2)]);
-      return /12 条提问/.test(s.output) ? s : null;
-    }, 'background injector to find the prompts', 20000);
-    assert.match(st.output, /后台注入器: 运行中/);
-  });
-
-  await test('the background injector stops when the app quits', async () => {
-    spawnSync('pkill', ['-TERM', '-f', fake]); // no shell, so pkill cannot match its own parent
-    await waitFor(async () => !fs.existsSync(path.join(home, '.claude-prompt-nav', 'injector.pid')), 'pid file removal', 15000);
-    assert.match(fs.readFileSync(path.join(home, '.claude-prompt-nav', 'injector.log'), 'utf8'), /Claude 已退出/);
-  });
 } finally {
-  injector?.kill();
-  chrome.kill();
-  spawnSync('pkill', ['-TERM', '-f', path.join(ROOT, 'test/fixtures/fake-claude.sh')]);
-  fs.rmSync(home, { recursive: true, force: true });
+  await browser.close();
 }
 
 const failed = results.filter(([ok]) => !ok).length;

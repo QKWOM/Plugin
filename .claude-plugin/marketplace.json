@@ -8,8 +8,8 @@
     {
       "name": "prompt-nav",
       "source": "./plugins/prompt-nav",
-      "description": "ChatGPT 式的提问导航条：Claude 桌面版对话旁显示每条提问的刻度，悬停预览提问和回复、点击跳回，⌃⌥↑/↓ 逐条切换。",
-      "version": "0.2.0",
+      "description": "ChatGPT 式的提问导航条：对话旁显示每条提问的刻度，悬停预览提问和回复、点击跳回，⌃⌥↑/↓ 逐条切换。桌面版通过开发者模式运行，浏览器里作为油猴脚本。",
+      "version": "0.3.0",
       "category": "productivity"
     }
   ]
