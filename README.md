@@ -1,11 +1,12 @@
 # Claude Prompt Nav
 
-给 **Claude 桌面版**加上 ChatGPT 那样的「提问导航条」：对话右侧每条提问一个刻度，鼠标移上去列出所有提问，点一下就跳回那条提问。
+给 **Claude 桌面版**加上 ChatGPT 那样的「提问导航条」：对话左侧每条提问一个刻度，鼠标停在刻度上就能预览那条提问和回复的开头，点一下就跳回去。
 
 ![演示（测试用的模拟页面）](docs/screenshot.png)
 
 - **刻度条**：一条提问一个刻度，当前读到的那条会高亮（橙色）
-- **悬停展开列表**：显示每条提问的开头，点击跳转，跳到的提问会闪一下边框
+- **悬停预览**：鼠标所在的刻度会放大（离得越近越长、越亮），旁边弹出卡片，显示这条提问和 Claude 回复的开头；沿着刻度条上下移动，卡片跟着切换
+- **点击跳转**：点刻度或卡片跳到那条提问，跳到的提问会闪一下边框
 - **快捷键**：`⌃⌥↑` / `⌃⌥↓`（Windows：`Ctrl+Alt+↑/↓`）跳到上一条 / 下一条提问
 - 自动跟随浅色 / 深色主题；新提问会实时出现；刷新或切换对话后自动恢复
 - **识别不到时手动教它一次**：按 `⌃⌥P`，先点一条你的提问，再点一条 Claude 的回复，它会记住这个界面的结构
@@ -59,10 +60,10 @@ node ~/.claude-prompt-nav/bin/claude-nav.mjs start --restart
 ## 没有出现导航条？
 
 1. 先确认 Claude 是用启动器打开的：`node ~/.claude-prompt-nav/bin/claude-nav.mjs status` 会列出每个窗口识别到几条提问。
-2. 桌面版的页面结构没有公开。脚本内置了 claude.ai 使用的 `data-testid="user-message"` 等写法；如果某个界面（比如 Code 标签页）结构不同，打开一段**至少有一问一答**的对话，按 `⌃⌥P`（Windows：`Ctrl+Alt+P`），先点你的一条提问，再点 Claude 的一条回复。识别结果会保存下来，以后自动使用；面板底部的「识别不准？重新选择」可以重来。
+2. 桌面版的页面结构没有公开。脚本内置了 claude.ai 使用的 `data-testid="user-message"` 等写法；如果某个界面（比如 Code 标签页）结构不同，打开一段**至少有一问一答**的对话，按 `⌃⌥P`（Windows：`Ctrl+Alt+P`），先点你的一条提问，再点 Claude 的一条回复。识别结果会保存下来，以后自动使用；识别得不对就再按一次 `⌃⌥P` 重新选。
 3. 后台注入器的日志在 `~/.claude-prompt-nav/injector.log`。
 
-在 DevTools 控制台里还可以用 `claudePromptNav.status()`、`claudePromptNav.setSelector('...')`、`claudePromptNav.resetSelector()`、`claudePromptNav.setSide('left')`（把刻度条放到左边）。
+在 DevTools 控制台里还可以用 `claudePromptNav.status()`、`claudePromptNav.setSelector('...')`、`claudePromptNav.resetSelector()`、`claudePromptNav.setSide('right')`（把刻度条放到右边）。
 
 ## 在浏览器里用（claude.ai）
 

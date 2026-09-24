@@ -99,31 +99,73 @@ try {
     assert.equal(await page.locator('claude-prompt-nav .tick').count(), 12);
   });
 
-  await test('rail sits inside the right edge of the conversation', async () => {
+  const tickSizes = () => page.evaluate(() => [...document.querySelector('claude-prompt-nav').shadowRoot.querySelectorAll('.tick')]
+    .map((t) => ({ d: t.getAttribute('data-d'), width: parseFloat(getComputedStyle(t, '::after').width) })));
+  const card = page.locator('claude-prompt-nav .card');
+
+  await test('rail sits inside the left edge of the conversation, like ChatGPT', async () => {
     const rail = await page.locator('claude-prompt-nav .rail').boundingBox();
     const sc = await page.locator('#scroll').boundingBox();
     assert.ok(rail, 'rail visible');
-    assert.ok(rail.x + rail.width <= sc.x + sc.width && rail.x > sc.x + sc.width - 60, JSON.stringify({ rail, sc }));
+    assert.ok(rail.x >= sc.x && rail.x < sc.x + 20, JSON.stringify({ rail, sc }));
     const mid = rail.y + rail.height / 2;
     assert.ok(Math.abs(mid - (sc.y + sc.height / 2)) < 2, 'vertically centred');
   });
 
-  await test('hovering the rail shows every prompt', async () => {
-    await page.locator('claude-prompt-nav .rail').hover();
-    const panel = page.locator('claude-prompt-nav .panel');
-    await panel.waitFor({ state: 'visible' });
-    assert.equal(await panel.locator('.item').count(), 12);
-    assert.match(await panel.locator('.item').first().innerText(), /EdgeVLA/);
-    await page.screenshot({ path: path.join(OUT, 'panel-light.png') });
+  await test('hovering a tick magnifies the ticks around it', async () => {
+    await page.locator('claude-prompt-nav .tick').nth(3).hover();
+    await sleep(300); // width transition
+    const sizes = await tickSizes();
+    assert.deepEqual(sizes.slice(0, 8).map((t) => t.d), ['3', '2', '1', '0', '1', '2', '3', null]);
+    // Tick 0 is the active (current) prompt, which always stays a little longer.
+    const w = sizes.map((t) => t.width);
+    assert.ok(w[3] > w[4] && w[4] > w[5] && w[5] > w[6] && w[6] > w[7], JSON.stringify(w));
+    assert.deepEqual([w[2], w[1]], [w[4], w[5]], 'symmetric around the hovered tick');
   });
 
-  await test('clicking a row jumps to that prompt and marks it active', async () => {
-    await page.locator('claude-prompt-nav .item').nth(7).click();
+  await test('the card previews the hovered prompt and the start of its reply', async () => {
+    await card.waitFor({ state: 'visible' });
+    assert.equal(await card.locator('.card-title').innerText(), '和 SmolVLA 的分工是什么？');
+    assert.equal(await card.locator('.card-count').innerText(), '4 / 12');
+    const body = await card.locator('.card-body').innerText();
+    assert.match(body, /^回答「和 SmolVLA 的分工是什么？」的第 1 段。/);
+    assert.doesNotMatch(body, /复制|重试|隐藏的思考过程/, 'buttons and hidden text are left out');
+    const cb = await card.boundingBox();
+    const tb = await page.locator('claude-prompt-nav .tick').nth(3).boundingBox();
+    const rb = await page.locator('claude-prompt-nav .rail').boundingBox();
+    assert.ok(Math.abs(cb.y + cb.height / 2 - (tb.y + tb.height / 2)) < 2, 'card centred on the tick');
+    assert.ok(cb.x >= rb.x + rb.width, 'card beside the rail, not over it');
+    await page.screenshot({ path: path.join(OUT, 'card-light.png') });
+  });
+
+  await test('moving along the rail follows the pointer', async () => {
+    await page.locator('claude-prompt-nav .tick').nth(9).hover();
+    assert.equal(await card.locator('.card-count').innerText(), '10 / 12');
+    const sizes = await tickSizes();
+    assert.equal(sizes[9].d, '0');
+    assert.equal(sizes[3].d, null);
+  });
+
+  await test('the last prompt previews its reply without running past the conversation', async () => {
+    await page.locator('claude-prompt-nav .tick').nth(11).hover();
+    const body = await card.locator('.card-body').innerText();
+    assert.match(body, /^回答「最后再列一个待办清单」的第 1 段。/);
+  });
+
+  await test('leaving the rail hides the card and relaxes the ticks', async () => {
+    await page.mouse.move(700, 400);
+    await card.waitFor({ state: 'hidden' });
+    assert.ok((await tickSizes()).every((t) => t.d === null));
+  });
+
+  await test('clicking the card jumps to that prompt and marks it active', async () => {
+    await page.locator('claude-prompt-nav .tick').nth(7).hover();
+    await card.click();
     await sleep(900);
     const top = await promptTop(7, USER);
     assert.ok(Math.abs(top - 20) < 4, `prompt 8 top offset ${top}`);
     assert.equal(await activeTick(), 7);
-    assert.equal(await page.locator('claude-prompt-nav .panel').isVisible(), false);
+    assert.equal(await card.isVisible(), false);
   });
 
   await test('Ctrl+Alt+Down / Up step through prompts', async () => {
@@ -215,9 +257,9 @@ try {
     await sleep(900);
     const top = await page.evaluate(() => document.querySelectorAll('.bubble.human')[4].getBoundingClientRect().top);
     assert.ok(Math.abs(top - 20) < 4, `top ${top}`);
-    await page.locator('claude-prompt-nav .rail').hover();
-    await page.locator('claude-prompt-nav .panel').waitFor({ state: 'visible' });
-    await page.screenshot({ path: path.join(OUT, 'panel-dark.png') });
+    await card.waitFor({ state: 'visible' });
+    assert.match(await card.locator('.card-body').innerText(), /^Reply 5, paragraph 1\./);
+    await page.screenshot({ path: path.join(OUT, 'card-dark.png') });
   });
 
   await test('the picked selector is remembered across reloads and can be reset', async () => {

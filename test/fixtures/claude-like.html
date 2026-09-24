@@ -14,6 +14,11 @@
   .row { margin: 18px 0; }
   .human { max-width: 80%; margin-left: auto; padding: 10px 14px; border-radius: 12px; background: #efece3; }
   .input { height: 90px; flex: none; border-top: 1px solid #e5e2d9; }
+  .actions button { font: 12px system-ui, sans-serif; margin-right: 8px; padding: 0; border: 0; background: none; color: inherit; opacity: 0.55; }
+  .dark body { background: #262624; color: #ece9e2; }
+  .dark .sidebar { background: #1f1e1d; }
+  .dark .human { background: #141413; }
+  .dark .header, .dark .input { border-color: #3a3936; }
 </style>
 </head>
 <body>
@@ -48,11 +53,14 @@
     return e;
   }
   function p(text) { return el('p', {}, [text]); }
+  if (location.hash === '#dark') document.documentElement.classList.add('dark');
   window.addTurn = (text, paragraphs = 4) => {
     col.append(el('div', { class: 'row' }, [el('div', { class: 'human' }, [el('div', { 'data-testid': 'user-message' }, [p(text)])])]));
     const answer = [];
     for (let i = 0; i < paragraphs; i++) answer.push(p(`回答「${text}」的第 ${i + 1} 段。Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`));
-    col.append(el('div', { class: 'row' }, [el('div', { class: 'font-claude-response' }, answer)]));
+    const thinking = el('div', { style: 'display: none' }, ['隐藏的思考过程']);
+    const actions = el('div', { class: 'actions' }, [el('button', {}, ['复制']), el('button', {}, ['重试'])]);
+    col.append(el('div', { class: 'row' }, [thinking, el('div', { class: 'font-claude-response' }, answer), actions]));
   };
   prompts.forEach((t, i) => addTurn(t, 3 + (i % 4)));
 </script>

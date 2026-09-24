@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Prompt Nav
 // @namespace    https://github.com/qkwom/plugin
-// @version      0.1.0
+// @version      0.2.0
 // @description  ChatGPT-style prompt rail for Claude: hover to preview, click to jump back to any earlier prompt.
 // @match        https://claude.ai/*
 // @run-at       document-idle
@@ -16,9 +16,9 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.0';
   const STORE_KEY = 'claudePromptNav:v1';
-  const RAIL_WIDTH = 28;
+  const RAIL_WIDTH = 36;
   const JUMP_OFFSET = 20;
 
   // Tried in order until one matches; a selector picked with Ctrl+Alt+P wins over all of them.
@@ -41,24 +41,19 @@
   }
 
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-  const KEYS = isMac ? '⌃⌥↑ / ⌃⌥↓' : 'Ctrl+Alt+↑ / ↓';
   const PICK_KEY = isMac ? '⌃⌥P' : 'Ctrl+Alt+P';
 
   const STYLES = `
 :host { all: initial; }
 :host {
-  --fg: #1f1e1d; --muted: #8a8680; --bg: #ffffff;
-  --tick: rgba(31, 30, 29, 0.25); --tick-hover: rgba(31, 30, 29, 0.65);
-  --border: rgba(31, 30, 29, 0.12); --hover: rgba(31, 30, 29, 0.06);
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+  --fg: #1f1e1d; --muted: #7a766f; --bg: #ffffff;
+  --border: rgba(31, 30, 29, 0.12); --shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
   --accent: #d97757; --accent-soft: rgba(217, 119, 87, 0.1);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 :host([data-theme="dark"]) {
-  --fg: #ece9e2; --muted: #9b978f; --bg: #2b2a27;
-  --tick: rgba(236, 233, 226, 0.25); --tick-hover: rgba(236, 233, 226, 0.75);
-  --border: rgba(236, 233, 226, 0.12); --hover: rgba(236, 233, 226, 0.08);
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --fg: #ece9e2; --muted: #a29e96; --bg: #2f2e2b;
+  --border: rgba(236, 233, 226, 0.12); --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 * { box-sizing: border-box; }
 .rail {
@@ -72,34 +67,33 @@
   margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; outline: none;
 }
 .tick::after {
-  content: ""; position: absolute; top: 50%; right: 6px; width: 10px; height: 2px; margin-top: -1px;
-  border-radius: 2px; background: var(--tick); transition: width 0.12s ease, background-color 0.12s ease;
+  content: ""; position: absolute; top: 50%; left: 8px; width: 8px; height: 2px; margin-top: -1px;
+  border-radius: 2px; background: var(--fg); opacity: 0.28;
+  transition: width 0.15s ease, opacity 0.15s ease;
 }
-.rail.left .tick::after { right: auto; left: 6px; }
-.tick:hover::after, .tick.hl::after, .tick:focus-visible::after { width: 16px; background: var(--tick-hover); }
-.tick.active::after { width: 16px; background: var(--accent); }
-.panel {
-  position: fixed; z-index: 2147483001; width: 300px; max-width: calc(100vw - 32px); max-height: min(62vh, 520px);
-  display: none; flex-direction: column; overflow: hidden;
-  background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px;
-  box-shadow: var(--shadow); font: 13px/1.45 var(--font);
+.rail.right .tick::after { left: auto; right: 8px; }
+/* Hovering magnifies the ticks around the pointer, like ChatGPT's rail. */
+.tick[data-d="3"]::after { width: 11px; opacity: 0.4; }
+.tick[data-d="2"]::after { width: 14px; opacity: 0.5; }
+.tick[data-d="1"]::after { width: 18px; opacity: 0.65; }
+.tick[data-d="0"]::after, .tick:focus-visible::after { width: 24px; opacity: 1; }
+.tick.active::after { background: var(--accent); opacity: 1; }
+.tick.active:not([data-d="0"]):not([data-d="1"])::after { width: 14px; }
+.card {
+  position: fixed; z-index: 2147483001; width: 320px; max-width: calc(100vw - 32px);
+  display: none; padding: 12px 14px; cursor: pointer;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow); font: 13px/1.55 var(--font);
 }
-.panel.show { display: flex; }
-.list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px; }
-.item {
-  display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 6px 8px; margin: 0;
-  border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+.card.show { display: block; }
+.card-head { display: flex; align-items: baseline; gap: 10px; }
+.card-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-count { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.card-body {
+  margin-top: 4px; color: var(--muted); overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
 }
-.item:hover, .item.hl { background: var(--hover); }
-.item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.num { flex: none; min-width: 1.8em; text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.item.active { background: var(--accent-soft); }
-.item.active .num, .item.active .txt { color: var(--accent); }
-.foot {
-  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 6px 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px;
-}
+.card-body:empty { display: none; }
 .link {
   border: 0; background: none; padding: 0; margin: 0; color: var(--muted); font: inherit; cursor: pointer;
   text-decoration: underline; text-underline-offset: 2px;
@@ -128,17 +122,17 @@
   let config = loadConfig();
   let items = []; // [{ el, text }] in document order
   let ticks = [];
-  let rows = [];
   let selectorInUse = null;
   let source = 'none';
   let scroller = null; // scrollable ancestor of the prompts; null means the document scrolls
   let activeIndex = -1;
   let pinnedIndex = -1; // set by a jump, cleared by the next manual scroll
+  let hoverIndex = -1; // tick under the pointer, centre of the magnified ticks
+  let cardIndex = -1; // prompt shown in the hover card
   let picking = null;
   let refreshTimer = 0;
   let intervalTimer = 0;
   let rafId = 0;
-  let showTimer = 0;
   let hideTimer = 0;
   let toastTimer = 0;
   const cleanups = [];
@@ -150,18 +144,17 @@
   adoptStyles(root, STYLES);
 
   const rail = h('nav', { class: 'rail', 'aria-label': 'Prompt navigation' });
-  const list = h('div', { class: 'list' });
-  const repick = h('button', { class: 'link', type: 'button' }, '识别不准？重新选择');
-  const panel = h('div', { class: 'panel', role: 'dialog', 'aria-label': 'Prompts' },
-    list,
-    h('div', { class: 'foot' }, h('span', null, KEYS), repick));
+  const cardTitle = h('div', { class: 'card-title' });
+  const cardCount = h('div', { class: 'card-count' });
+  const cardBody = h('div', { class: 'card-body' });
+  const card = h('div', { class: 'card', role: 'tooltip' }, h('div', { class: 'card-head' }, cardTitle, cardCount), cardBody);
   const cancelPick = h('button', { class: 'link', type: 'button' }, '取消 (Esc)');
   const bannerText = h('span');
   const banner = h('div', { class: 'banner', role: 'status' }, bannerText, cancelPick);
   const toastEl = h('div', { class: 'toast', role: 'status' });
   const hoverBox = h('div', { class: 'box' });
   const chosenBox = h('div', { class: 'box chosen' });
-  root.append(rail, panel, hoverBox, chosenBox, banner, toastEl);
+  root.append(rail, card, hoverBox, chosenBox, banner, toastEl);
 
   function h(tag, attrs, ...children) {
     const el = document.createElement(tag);
@@ -315,17 +308,15 @@
   }
 
   function render() {
+    hideCard();
     ticks = items.map((it, i) => h('button', {
       class: 'tick', type: 'button', 'data-i': String(i), 'aria-label': `${i + 1}. ${it.text}`,
     }));
-    rows = items.map((it, i) => h('button', { class: 'item', type: 'button', 'data-i': String(i), title: it.text },
-      h('span', { class: 'num' }, String(i + 1)),
-      h('span', { class: 'txt' }, it.text || '(无文字)')));
     rail.replaceChildren(...ticks);
-    list.replaceChildren(...rows);
     activeIndex = -1;
-    if (!items.length) hidePanel();
   }
+
+  const side = () => (config.side === 'right' ? 'right' : 'left');
 
   function viewRect() {
     const vw = document.documentElement.clientWidth || innerWidth;
@@ -353,12 +344,12 @@
     const maxHeight = Math.max(60, height * 0.6);
     const gap = Math.max(4, Math.min(12, Math.floor(maxHeight / items.length)));
     const railHeight = Math.min(maxHeight, gap * items.length + 8);
-    const left = config.side === 'left' ? r.left + 4 : r.right - RAIL_WIDTH - 4;
+    const left = side() === 'left' ? r.left + 4 : r.right - RAIL_WIDTH - 4;
     rail.style.setProperty('--gap', `${gap}px`);
     rail.style.height = `${Math.round(railHeight)}px`;
     rail.style.top = `${Math.round(r.top + (height - railHeight) / 2)}px`;
     rail.style.left = `${Math.round(left)}px`;
-    rail.classList.toggle('left', config.side === 'left');
+    rail.classList.toggle('right', side() === 'right');
     rail.classList.add('show');
   }
 
@@ -377,12 +368,10 @@
   function setActive(i) {
     if (i === activeIndex) return;
     ticks[activeIndex]?.classList.remove('active');
-    rows[activeIndex]?.classList.remove('active');
     activeIndex = i;
     const tick = ticks[i];
     if (!tick) return;
     tick.classList.add('active');
-    rows[i].classList.add('active');
     if (rail.scrollHeight > rail.clientHeight) {
       const top = tick.offsetTop;
       if (top < rail.scrollTop || top + tick.offsetHeight > rail.scrollTop + rail.clientHeight) {
@@ -395,54 +384,93 @@
     rafId = 0;
     layout();
     setActive(computeActive());
+    positionCard();
   }
 
   function scheduleUpdate() {
     if (!rafId) rafId = requestAnimationFrame(update);
   }
 
-  // ---------------------------------------------------------------- panel
+  // ---------------------------------------------------------------- hover card
+  //
+  // Like ChatGPT: the ticks around the one under the pointer grow (a small dock
+  // magnification) and a card beside it previews the prompt and the start of the reply.
 
-  function highlight(i, onOff) {
-    ticks[i]?.classList.toggle('hl', onOff);
-    const row = rows[i];
-    if (!row) return;
-    row.classList.toggle('hl', onOff);
-    if (onOff && panel.classList.contains('show')) row.scrollIntoView({ block: 'nearest' });
+  const MAGNIFY = 3; // ticks on each side of the hovered one that grow
+
+  function setHover(i) {
+    if (i === hoverIndex) return;
+    for (let k = hoverIndex - MAGNIFY; k <= hoverIndex + MAGNIFY; k++) ticks[k]?.removeAttribute('data-d');
+    hoverIndex = i;
+    if (i < 0) return;
+    for (let k = i - MAGNIFY; k <= i + MAGNIFY; k++) ticks[k]?.setAttribute('data-d', String(Math.abs(k - i)));
   }
 
-  function showPanel() {
+  function showCard(i) {
     clearTimeout(hideTimer);
-    if (!items.length || picking || panel.classList.contains('show')) return;
-    host.setAttribute('data-theme', isDark() ? 'dark' : 'light');
-    panel.classList.add('show');
+    if (!items[i] || picking) return;
+    setHover(i);
+    if (!card.classList.contains('show')) host.setAttribute('data-theme', isDark() ? 'dark' : 'light');
+    cardIndex = i;
+    cardTitle.textContent = items[i].text || '(无文字)';
+    cardCount.textContent = `${i + 1} / ${items.length}`;
+    cardBody.textContent = replyPreview(i);
+    card.classList.add('show');
+    positionCard();
+  }
+
+  function positionCard() {
+    const tick = ticks[cardIndex];
+    if (!tick || !card.classList.contains('show')) return;
+    const tr = tick.getBoundingClientRect();
     const rr = rail.getBoundingClientRect();
-    const pw = panel.offsetWidth;
-    const ph = panel.offsetHeight;
-    const left = config.side === 'left' ? rr.right + 6 : rr.left - pw - 6;
-    const top = rr.top + rr.height / 2 - ph / 2;
-    panel.style.left = `${Math.round(Math.max(8, Math.min(innerWidth - pw - 8, left)))}px`;
-    panel.style.top = `${Math.round(Math.max(8, Math.min(innerHeight - ph - 8, top)))}px`;
-    const row = rows[activeIndex];
-    if (row) list.scrollTop = row.offsetTop - list.clientHeight / 2 + row.offsetHeight / 2;
+    const cw = card.offsetWidth;
+    const ch = card.offsetHeight;
+    const left = side() === 'left' ? rr.right + 4 : rr.left - cw - 4;
+    const top = tr.top + tr.height / 2 - ch / 2;
+    card.style.left = `${Math.round(Math.max(8, Math.min(innerWidth - cw - 8, left)))}px`;
+    card.style.top = `${Math.round(Math.max(8, Math.min(innerHeight - ch - 8, top)))}px`;
   }
 
-  function hidePanel() {
-    clearTimeout(showTimer);
+  function hideCard() {
     clearTimeout(hideTimer);
-    panel.classList.remove('show');
+    card.classList.remove('show');
+    cardIndex = -1;
+    setHover(-1);
   }
 
-  function scheduleShow() {
+  function scheduleHideCard() {
     clearTimeout(hideTimer);
-    clearTimeout(showTimer);
-    showTimer = setTimeout(showPanel, 120);
+    hideTimer = setTimeout(hideCard, 180);
   }
 
-  function scheduleHide() {
-    clearTimeout(showTimer);
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(hidePanel, 220);
+  // Controls, hidden text and the input box are not part of the reply the user reads.
+  const PREVIEW_SKIP = 'button, [role="button"], svg, style, script, noscript, textarea, input, select, '
+    + '[aria-hidden="true"], [contenteditable]:not([contenteditable="false"]), .sr-only';
+  const INLINE_TAGS = new Set(['a', 'abbr', 'b', 'code', 'del', 'em', 'i', 'ins', 'kbd', 'mark', 's', 'small', 'span', 'strong', 'sub', 'sup', 'u']);
+
+  // The visible text between prompt i and the next prompt, i.e. the start of Claude's reply.
+  function replyPreview(i, max = 220) {
+    const start = items[i].el;
+    const end = items[i + 1] ? items[i + 1].el : null;
+    const walker = document.createTreeWalker(scroller && scroller.contains(start) ? scroller : document.body, NodeFilter.SHOW_TEXT);
+    walker.currentNode = start;
+    let out = '';
+    let lastBlock = null;
+    for (let node = walker.nextNode(); node && out.length <= max; node = walker.nextNode()) {
+      if (start.contains(node)) continue;
+      if (end && end.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) break;
+      const parent = node.parentElement;
+      if (!parent || !node.data.trim() || parent.closest(PREVIEW_SKIP)) continue;
+      if (parent.checkVisibility && !parent.checkVisibility()) continue;
+      let block = parent;
+      while (INLINE_TAGS.has(block.localName) && block.parentElement) block = block.parentElement;
+      if (lastBlock && block !== lastBlock) out += ' ';
+      lastBlock = block;
+      out += node.data;
+    }
+    out = out.replace(/\s+/g, ' ').trim();
+    return out.length > max ? `${out.slice(0, max)}…` : out;
   }
 
   function indexFromEvent(e) {
@@ -530,7 +558,7 @@
 
   function startPicker() {
     if (picking) return;
-    hidePanel();
+    hideCard();
     picking = { prompt: null };
     host.setAttribute('data-theme', isDark() ? 'dark' : 'light');
     bannerText.textContent = '① 点击你自己发的任意一条提问';
@@ -694,27 +722,18 @@
     const i = indexFromEvent(e);
     if (i >= 0) jumpTo(i);
   });
-  list.addEventListener('click', (e) => {
+  rail.addEventListener('mouseover', (e) => {
     const i = indexFromEvent(e);
-    if (i < 0) return;
-    hidePanel();
+    if (i >= 0) showCard(i);
+  });
+  rail.addEventListener('mouseleave', scheduleHideCard);
+  card.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+  card.addEventListener('mouseleave', scheduleHideCard);
+  card.addEventListener('click', () => {
+    const i = cardIndex;
+    hideCard();
     jumpTo(i);
   });
-  for (const el of [rail, list]) {
-    el.addEventListener('mouseover', (e) => {
-      const i = indexFromEvent(e);
-      if (i >= 0) highlight(i, true);
-    });
-    el.addEventListener('mouseout', (e) => {
-      const i = indexFromEvent(e);
-      if (i >= 0) highlight(i, false);
-    });
-  }
-  rail.addEventListener('mouseenter', scheduleShow);
-  rail.addEventListener('mouseleave', scheduleHide);
-  panel.addEventListener('mouseenter', () => clearTimeout(hideTimer));
-  panel.addEventListener('mouseleave', scheduleHide);
-  repick.addEventListener('click', startPicker);
   cancelPick.addEventListener('click', () => stopPicker());
 
   const observer = new MutationObserver(scheduleRefresh);
@@ -740,7 +759,7 @@
     clearTimeout(refreshTimer);
     clearTimeout(toastTimer);
     cancelAnimationFrame(rafId);
-    hidePanel();
+    hideCard();
     while (cleanups.length) cleanups.pop()();
     host.remove();
     if (window.claudePromptNav === api) delete window.claudePromptNav;
@@ -762,10 +781,10 @@
     resetSelector() {
       return api.setSelector(null);
     },
-    setSide(side) {
-      config.side = side === 'left' ? 'left' : 'right';
+    setSide(where) {
+      config.side = where === 'right' ? 'right' : 'left';
       saveConfig();
-      hidePanel();
+      hideCard();
       scheduleUpdate();
     },
     status() {
